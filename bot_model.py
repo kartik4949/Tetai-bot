@@ -47,7 +47,7 @@ class tetai_model(tf.keras.Model, tetris_game_config):
             kernel_regularizer="l1",
             activation=tf.nn.leaky_relu,
         )
-        self.softmax = tf.keras.layers.Activation("softmax", dtype=tf.float32)
+        self.sigmoid = tf.keras.layers.Activation("sigmoid", dtype=tf.float32)
         self.flatten = tf.keras.layers.Flatten()
 
     @property
@@ -65,7 +65,7 @@ class tetai_model(tf.keras.Model, tetris_game_config):
         x = self.dense3(x)
         x = self.dense4(x)
         x = self.dense5(x)
-        _out_prob = self.softmax(x)
+        _out_prob = self.sigmoid(x)
         _stack_prob = tf.concat(_out_prob, axis=0)
         action = tf.compat.v1.multinomial(tf.math.log(_stack_prob), num_samples=1)
         # bug tf squeeze if not provided axis
@@ -74,7 +74,9 @@ class tetai_model(tf.keras.Model, tetris_game_config):
 
 
 if __name__ == "__main__":
-    inputs = tf.random.uniform((1, 20, 10))
     tm = tetai_model()
-    x = tm(inputs)
+    for i in range(100):
+        inputs = tf.random.uniform((1, 20, 10))
+        x = tm(inputs)
+        print(x)
     tm.summary()
