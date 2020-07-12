@@ -1,17 +1,20 @@
-# from rewards import Reward
-# from bot_model import tetai_model
-from main import Tetris, Figure
+import time
+
 import pygame
+import tensorflow as tf
 
-
-class InitEnviorment(Figure):
+from rewards import Rewards
+from bot_model import tetai_model as TetaiBrain
+from main import Tetris, Figure
+tf.enable_eager_execution()
+class InitEnvironment(Figure):
     BLACK = (0, 0, 0)
     WHITE = (255, 255, 255)
     GRAY = (128, 128, 128)
     CYAN = (0, 255, 255)
 
     def __init__(self):
-        colors = [
+        self.colors = [
             (0, 0, 0),
             (120, 37, 179),
             (100, 179, 179),
@@ -30,10 +33,11 @@ class InitEnviorment(Figure):
         pygame.display.set_caption("Tetris")
 
 
-class PlayTetris(InitEnviorment):
+class TetrisEngine(InitEnvironment):
     def __init__(self, *args, **kwargs):
 
-        super(PlayTetris, self).__init__(*args, **kwargs)
+        super(TetrisEngine, self).__init__(*args, **kwargs)
+        self._init_environment = super(TetrisEngine, self)
         self.done = None
         self.clock = None
         self.fps = None
@@ -41,6 +45,12 @@ class PlayTetris(InitEnviorment):
         self.game = None
         self.counter = 0
         self.pressing_down = False
+        self.BLACK = self._init_environment.BLACK
+        self.WHITE = self._init_environment.WHITE
+        self.GRAY = self._init_environment.GRAY
+        self.CYAN = self._init_environment.CYAN
+
+
 
     def __enter__(self):
         self.done = False
@@ -50,142 +60,159 @@ class PlayTetris(InitEnviorment):
         self.game = Tetris(20, 10)
         self.counter = 0
         self.pressing_down = False
+        return self
 
     def __exit__(self, type, value, tb):
         pygame.quit()
 
-    def __call__(self):
-        done = self.done
-        clock = self.clock
-        fps = self.fps
-        flag_set_level = self.flag_set_level
-        game = self.game
-        counter = self.counter
-        pressing_down = self.pressing_down
+    def __call__(self , done ):
 
-        while not done:
-            if game.figure is None:
-                game.new_figure()
-            # TODO @HIGH #discuss counter
-            counter += 1
-            if counter > 100000:
-                counter = 0
+        if self.game.figure is None:
+            self.game.new_figure()
+        # TODO @HIGH #discuss self.counter
+        self.counter += 1
+        if self.counter > 100000:
+            self.counter = 0
 
-            if counter % (fps // game.level // 2) == 0 or pressing_down:
-                if game.state == "start":
-                    game.go_down()
+        if self.counter % (self.fps // self.game.level // 2) == 0 or self.pressing_down:
+            if self.game.state == "start":
+                self.game.go_down()
 
-            if game.score % 1 == 0 and game.score > 0 and flag_set_level:
-                if (fps // game.level // 2) == 1:
-                    self.screen.blit(text_game_master, [10, 200])
-                else:
-                    game.level += 1
-                    flag_set_level = False
-                    self.screen.blit(text_game_score_update, [10, 200])
-            # model_action_out = model(inputs)
-            # key  = get_key(model_action_out)
-            key = 0
-            event = _create_event_key(key)
-            _post_event(event)
+        if self.game.score % 1 == 0 and self.game.score > 0 and self.flag_set_level:
+            if (self.fps // self.game.level // 2) == 1:
+                self.screen.blit(text_game_master, [10, 200])
+            else:
+                self.game.level += 1
+                self.flag_set_level = False
+                self.screen.blit(text_game_score_update, [10, 200])
 
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    done = True
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                done = True
 
-                if event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_UP:
-                        game.rotate()
-                    if event.key == pygame.K_DOWN:
-                        pressing_down = True
-                    if event.key == pygame.K_LEFT:
-                        game.go_side(-1)
-                    if event.key == pygame.K_RIGHT:
-                        game.go_side(1)
-                    if event.key == pygame.K_SPACE:
-                        game.go_space()
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_UP:
+                    self.game.rotate()
+                if event.key == pygame.K_DOWN:
+                    self.pressing_down = True
+                if event.key == pygame.K_LEFT:
+                    self.game.go_side(-1)
+                if event.key == pygame.K_RIGHT:
+                    self.game.go_side(1)
+                if event.key == pygame.K_SPACE:
+                    self.game.go_space()
 
-                if event.type == pygame.KEYUP:
-                    if event.key == pygame.K_DOWN:
-                        pressing_down = False
+            if event.type == pygame.KEYUP:
+                if event.key == pygame.K_DOWN:
+                    self.pressing_down = False
 
-            self.screen.fill(CYAN)
+        self.screen.fill(self.CYAN)
 
-            for i in range(game.height):
-                for j in range(game.width):
+        for i in range(self.game.height):
+            for j in range(self.game.width):
+                pygame.draw.rect(
+                    self.screen,
+                    self.GRAY,
+                    [
+                        self.game.x + self.game.zoom * j,
+                        self.game.y + self.game.zoom * i,
+                        self.game.zoom,
+                        self.game.zoom,
+                    ],
+                    1,
+                )
+                if self.game.field[i][j] > 0:
                     pygame.draw.rect(
                         self.screen,
-                        GRAY,
+                        self.colors[self.game.field[i][j]],
                         [
-                            game.x + game.zoom * j,
-                            game.y + game.zoom * i,
-                            game.zoom,
-                            game.zoom,
+                            self.game.x + self.game.zoom * j + 1,
+                            self.game.y + self.game.zoom * i + 1,
+                            self.game.zoom - 2,
+                            self.game.zoom - 1,
                         ],
-                        1,
                     )
-                    if game.field[i][j] > 0:
+
+        if self.game.figure is not None:
+            for i in range(4):
+                for j in range(4):
+                    p = i * 4 + j
+                    if p in self.game.figure.image():
                         pygame.draw.rect(
                             self.screen,
-                            self.colors[game.field[i][j]],
+                            self.colors[self.game.figure.color],
                             [
-                                game.x + game.zoom * j + 1,
-                                game.y + game.zoom * i + 1,
-                                game.zoom - 2,
-                                game.zoom - 1,
+                                self.game.x + self.game.zoom * (j + self.game.figure.x) + 1,
+                                self.game.y + self.game.zoom * (i + self.game.figure.y) + 1,
+                                self.game.zoom - 2,
+                                self.game.zoom - 2,
                             ],
                         )
+        # Loop until the user clicks the close button.
+        font = pygame.font.SysFont("Calibri", 25, True, False)
+        font1 = pygame.font.SysFont("Calibri", 65, True, False)
+        font_master = pygame.font.SysFont("Calibri", 25, True, False)
+        font_update = pygame.font.SysFont("Calibri", 25, True, False)
+        text = font.render("Score: " + str(self.game.score), True, self.BLACK)
+        text_game_over = font1.render("Game Over :( ", True, (255, 0, 0))
+        text_game_master = font_master.render("soja abbb", True, (255, 0, 0))
+        text_game_score_update = font_update.render(
+            "New Level Unlocked ", True, (255, 0, 0)
+        )
 
-            if game.figure is not None:
-                for i in range(4):
-                    for j in range(4):
-                        p = i * 4 + j
-                        if p in game.figure.image():
-                            pygame.draw.rect(
-                                self.screen,
-                                self.colors[game.figure.color],
-                                [
-                                    game.x + game.zoom * (j + game.figure.x) + 1,
-                                    game.y + game.zoom * (i + game.figure.y) + 1,
-                                    game.zoom - 2,
-                                    game.zoom - 2,
-                                ],
-                            )
-            # Loop until the user clicks the close button.
-            font = pygame.font.SysFont("Calibri", 25, True, False)
-            font1 = pygame.font.SysFont("Calibri", 65, True, False)
-            font_master = pygame.font.SysFont("Calibri", 25, True, False)
-            font_update = pygame.font.SysFont("Calibri", 25, True, False)
-            text = font.render("Score: " + str(game.score), True, BLACK)
-            text_game_over = font1.render("Game Over :( ", True, (255, 0, 0))
-            text_game_master = font_master.render("soja abbb", True, (255, 0, 0))
-            text_game_score_update = font_update.render(
-                "New Level Unlocked ", True, (255, 0, 0)
-            )
+        self.screen.blit(text, [0, 0])
+        if self.game.state == "gameover":
+            done = True
+            self.screen.blit(text_game_over, [10, 200])
 
-            self.screen.blit(text, [0, 0])
-            if game.state == "gameover":
-                self.screen.blit(text_game_over, [10, 200])
-
-            pygame.display.flip()
-            clock.tick(fps)
+        pygame.display.flip()
+        self.clock.tick(self.fps)
+        return done , self.game.level
 
 
-KEY_MAP = [pygame.K_LEFT, pygame.K_RIGHT, pygame.K_UP, pygame.K_DOWN]
 
+class Play:
+    KEY_MAP = [pygame.K_LEFT, pygame.K_RIGHT, pygame.K_UP, pygame.K_DOWN]
+    def __init__(self):
+        self.brain = TetaiBrain()
 
-def _create_event_key(key):
-    _key = KEY_MAP[key]
-    event = pygame.event.Event(
-        pygame.KEYDOWN, unicode="a", key=_key, mod=pygame.KMOD_NONE
-    )  # create the event
-    return event
+    @staticmethod
+    def _create_event_key(key):
+        _key = Play.KEY_MAP[key]
+        event = pygame.event.Event(
+            pygame.KEYDOWN, unicode="_", key=_key, mod=pygame.KMOD_NONE
+        )  # create the event
+        return event
 
+    @staticmethod
+    def _post_event(event):
+        pygame.event.post(event)
 
-def _post_event(event):
-    pygame.event.post(event)
+    def get_action(self, inputs):
+        key = self.brain(inputs).numpy()[0]
+        # NN inference 
+        return key
+
+    @staticmethod
+    def _calc_reponse_time(level):
+        return 1/level
+
+    def __call__(self):
+
+        with TetrisEngine() as tetris_bot:
+
+            done = False
+            level = 1
+            while not done:
+                inputs = tf.random.uniform((1, 20, 10))
+                _key = self.get_action(inputs)
+                _response_time = self.__class__._calc_reponse_time(level)
+                time.sleep(1/25)
+                _event = self.__class__._create_event_key(_key)
+                self.__class__._post_event(_event)
+                done , level = tetris_bot(done)
 
 
 if __name__ == "__main__":
-    play = PlayTetris()
-    with play as tetris_bot:
-        tetris_bot()
+    bot = Play()
+    bot()
