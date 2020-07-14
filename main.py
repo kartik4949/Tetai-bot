@@ -88,28 +88,33 @@ class Tetris:
                         self.field[i1][j] = self.field[i1 - 1][j]
         self.score += lines ** 2
         flag_set_level = True
+        return lines
 
     def go_space(self):
         while not self.intersects():
             self.figure.y += 1
         self.figure.y -= 1
-        self.freeze()
+        lines = self.freeze()
+        return lines
 
     def go_down(self):
+        lines = 0
         self.figure.y += 1
         if self.intersects():
             self.figure.y -= 1
-            self.freeze()
+            lines = self.freeze()
+        return lines
 
     def freeze(self):
         for i in range(4):
             for j in range(4):
                 if i * 4 + j in self.figure.image():
                     self.field[i + self.figure.y][j + self.figure.x] = self.figure.color
-        self.break_lines()
+        lines = self.break_lines()
         self.new_figure()
         if self.intersects():
             self.state = "gameover"
+        return lines
 
     def go_side(self, dx):
         old_x = self.figure.x

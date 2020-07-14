@@ -2,11 +2,11 @@ import time
 
 import pygame
 import tensorflow as tf
-
+import numpy as np
 from rewards import Rewards
 from bot_model import tetai_model as TetaiBrain
 from main import Tetris, Figure
-tf.enable_eager_execution()
+
 class InitEnvironment(Figure):
     BLACK = (0, 0, 0)
     WHITE = (255, 255, 255)
@@ -38,22 +38,22 @@ class TetrisEngine(InitEnvironment):
 
         super(TetrisEngine, self).__init__(*args, **kwargs)
         self._init_environment = super(TetrisEngine, self)
-        self.done = None
-        self.clock = None
-        self.fps = None
-        self.flag_set_level = None
-        self.game = None
-        self.counter = 0
-        self.pressing_down = False
         self.BLACK = self._init_environment.BLACK
         self.WHITE = self._init_environment.WHITE
         self.GRAY = self._init_environment.GRAY
         self.CYAN = self._init_environment.CYAN
+        self.clock = pygame.time.Clock()
+        self.fps = 25
+        self.flag_set_level = False
+        self.game = Tetris(20, 10)
+        self.counter = 0
+        self.pressing_down = False
+        rwrds = Rewards("Linesqrt")
+        self._get_reward = rwrds._line_scored
 
 
 
     def __enter__(self):
-        self.done = False
         self.clock = pygame.time.Clock()
         self.fps = 25
         self.flag_set_level = False
@@ -65,7 +65,20 @@ class TetrisEngine(InitEnvironment):
     def __exit__(self, type, value, tb):
         pygame.quit()
 
-    def __call__(self , done ):
+    def clear(self):
+        self.screen.fill((0,0,0))
+    def restart(self):
+        self.game.state = "start"
+        _field = np.asarray(self.game.field)
+        _field = np.zeros(_field.shape)
+        self.game.field = [list(field) for field in _field]
+
+    def quit(self):
+        pygame.display.quit()
+
+    def __call__(self ):
+        done = False
+        _lines_popped = 0
 
         if self.game.figure is None:
             self.game.new_figure()
@@ -76,7 +89,7 @@ class TetrisEngine(InitEnvironment):
 
         if self.counter % (self.fps // self.game.level // 2) == 0 or self.pressing_down:
             if self.game.state == "start":
-                self.game.go_down()
+                _lines_popped = self.game.go_down()
 
         if self.game.score % 1 == 0 and self.game.score > 0 and self.flag_set_level:
             if (self.fps // self.game.level // 2) == 1:
@@ -100,7 +113,7 @@ class TetrisEngine(InitEnvironment):
                 if event.key == pygame.K_RIGHT:
                     self.game.go_side(1)
                 if event.key == pygame.K_SPACE:
-                    self.game.go_space()
+                    _lines_popped = self.game.go_space()
 
             if event.type == pygame.KEYUP:
                 if event.key == pygame.K_DOWN:
@@ -167,13 +180,17 @@ class TetrisEngine(InitEnvironment):
 
         pygame.display.flip()
         self.clock.tick(self.fps)
-        return done , self.game.level
+        reward = self._get_reward(_lines_popped)
+        image_data = pygame.surfarray.array3d(pygame.display.get_surface())
+        return done ,reward , image_data
 
 
-
-class Play:
+class Play(TetrisEngine):
     KEY_MAP = [pygame.K_LEFT, pygame.K_RIGHT, pygame.K_UP, pygame.K_DOWN]
+
     def __init__(self):
+        super(Play ,self).__init__()
+        self.tetris_bot = super(Play ,self).__call__
         self.brain = TetaiBrain()
 
     @staticmethod
@@ -197,6 +214,14 @@ class Play:
     def _calc_reponse_time(level):
         return 1/level
 
+    def frame_step(self, key):
+        _event = self.__class__._create_event_key(key)
+        self.__class__._post_event(_event)
+        done ,reward, frame= self.tetris_bot()
+        if done:
+            return frame , -1.0 , 1
+        return frame ,reward ,  int(done)
+
     def __call__(self):
 
         with TetrisEngine() as tetris_bot:
@@ -213,6 +238,7 @@ class Play:
                 done , level = tetris_bot(done)
 
 
+
 if __name__ == "__main__":
-    bot = Play()
-    bot()
+    game = Play()
+    _out = game.frame_step(1)
