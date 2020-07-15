@@ -49,8 +49,6 @@ class TetrisEngine(InitEnvironment):
         self.game = Tetris(20, 10)
         self.counter = 0
         self.pressing_down = False
-        rwrds = Rewards("Linesqrt")
-        self._get_reward = rwrds._line_scored
 
 
 
@@ -89,7 +87,8 @@ class TetrisEngine(InitEnvironment):
 
         if self.game.score % 1 == 0 and self.game.score > 0 and self.flag_set_level:
             if (self.fps // self.game.level // 2) == 1:
-                self.screen.blit(text_game_master, [10, 200])
+                pass
+                #self.screen.blit(text_game_master, [10, 200])
             else:
                 self.game.level += 1
                 self.flag_set_level = False
@@ -172,13 +171,12 @@ class TetrisEngine(InitEnvironment):
         self.screen.blit(text, [0, 0])
         if self.game.state == "gameover":
             done = True
-            self.screen.blit(text_game_over, [10, 200])
+            #self.screen.blit(text_game_over, [10, 200])
 
         pygame.display.flip()
         self.clock.tick(self.fps)
-        reward = self._get_reward(_lines_popped)
         image_data = pygame.surfarray.array3d(pygame.display.get_surface())
-        return done ,reward , image_data , self.game.field
+        return done ,_lines_popped , image_data , self.game.field
 
 
 class Play(TetrisEngine):
@@ -188,6 +186,7 @@ class Play(TetrisEngine):
         super(Play ,self).__init__()
         self.tetris_bot = super(Play ,self).__call__
         self.brain = TetaiBrain()
+        self.reward = Rewards("MaxHeight")
 
     @staticmethod
     def _create_event_key(key):
@@ -213,16 +212,8 @@ class Play(TetrisEngine):
     def frame_step(self, key):
         _event = self.__class__._create_event_key(key)
         self.__class__._post_event(_event)
-        done ,reward, frame, field= self.tetris_bot()
-        #Adding Height Reward Calculator
-        heights = pd.DataFrame(field).ne(0).idxmax()
-        temp = sum([20-i if (i > 0) else i for i in heights])
-        temp /= -200
-        print(temp)
-        if reward != 0:
-            reward *= temp
-        else:
-            reward = temp
+        done ,_lines_popped , frame, field= self.tetris_bot()
+        reward = self.reward.reward(field, _lines_popped)
         if done:
             return frame , -1.0 , 1
         return frame , reward ,  int(done)
@@ -249,4 +240,6 @@ if __name__ == "__main__":
 
     for _ in range(100):
         _out = game.frame_step(3)
+        print(_out[1])
+    breakpoint()
     # print(out)
