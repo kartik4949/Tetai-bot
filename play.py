@@ -1,5 +1,6 @@
 import time
 
+import pandas as pd
 import pygame
 import tensorflow as tf
 import numpy as np
@@ -62,11 +63,6 @@ class TetrisEngine(InitEnvironment):
         self.pressing_down = False
         return self
 
-    def __exit__(self, type, value, tb):
-        pygame.quit()
-
-    def clear(self):
-        self.screen.fill((0,0,0))
     def restart(self):
         self.game.state = "start"
         _field = np.asarray(self.game.field)
@@ -182,7 +178,7 @@ class TetrisEngine(InitEnvironment):
         self.clock.tick(self.fps)
         reward = self._get_reward(_lines_popped)
         image_data = pygame.surfarray.array3d(pygame.display.get_surface())
-        return done ,reward , image_data
+        return done ,reward , image_data , self.game.field
 
 
 class Play(TetrisEngine):
@@ -207,7 +203,7 @@ class Play(TetrisEngine):
 
     def get_action(self, inputs):
         key = self.brain(inputs).numpy()[0]
-        # NN inference 
+        # NN inference
         return key
 
     @staticmethod
@@ -217,10 +213,19 @@ class Play(TetrisEngine):
     def frame_step(self, key):
         _event = self.__class__._create_event_key(key)
         self.__class__._post_event(_event)
-        done ,reward, frame= self.tetris_bot()
+        done ,reward, frame, field= self.tetris_bot()
+        #Adding Height Reward Calculator
+        heights = pd.DataFrame(field).ne(0).idxmax()
+        temp = sum([20-i if (i > 0) else i for i in heights])
+        temp /= -200
+        print(temp)
+        if reward != 0:
+            reward *= temp
+        else:
+            reward = temp
         if done:
             return frame , -1.0 , 1
-        return frame ,reward ,  int(done)
+        return frame , reward ,  int(done)
 
     def __call__(self):
 
@@ -235,10 +240,13 @@ class Play(TetrisEngine):
                 time.sleep(1/25)
                 _event = self.__class__._create_event_key(_key)
                 self.__class__._post_event(_event)
-                done , level = tetris_bot(done)
+                done ,reward , image_data = tetris_bot(done)
 
 
 
 if __name__ == "__main__":
     game = Play()
-    _out = game.frame_step(1)
+
+    for _ in range(100):
+        _out = game.frame_step(3)
+    # print(out)
