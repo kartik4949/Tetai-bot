@@ -70,8 +70,6 @@ class Train:
 
         t = 0
         while True:
-            if done:
-                game_state.restart()
             loss = 0
             Q_sa = 0
             action_index = 0
@@ -94,6 +92,11 @@ class Train:
 
             #run the selected action and observed next state and reward
             frame1_colored, reward, done = game_state.frame_step(a_t)
+
+            #Restart game if game is over
+            if done:
+                game_state.restart()
+
             frame1 = self._preprocess_image(frame1_colored)
             frame1 = frame1.reshape(1, frame1.shape[0], frame1.shape[1], 1) #1x80x80x1
             stack_frame1 = np.append(frame1, stack_frame[:, :, :, :3], axis=3)
@@ -120,6 +123,8 @@ class Train:
                     _loss = self._train_step(state_t,_targets)
                     gradients = tape.gradient(_loss, self.model.trainable_variables)
                     self.optimizer.apply_gradients(zip(gradients, self.model.trainable_variables))
+                    print("APPLIED GRADIENT")
+
 
             stack_frame = stack_frame1
             t = t + 1
@@ -129,8 +134,8 @@ class Train:
             if t % 1000 == 0:
                 print("Now we save model")
                 self.model.save_weights("model.h5", overwrite=True)
-                with open("model.json", "w") as outfile:
-                    json.dump(self.model.to_json(), outfile)
+                #with open("model.json", "w") as outfile:
+                    #json.dump(self.model.to_json(), outfile)
 
             if t <= OBSERVE:
                 state = "observe"
@@ -138,7 +143,7 @@ class Train:
                 state = "explore"
             else:
                 state = "train"
-            print(done)
+            print('Done = ', done)
 
             print("TIMESTEP", t, "/ STATE", state, \
                 "/ EPSILON", epsilon, "/ ACTION", action_index, "/ REWARD", reward, \
